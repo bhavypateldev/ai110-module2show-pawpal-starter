@@ -2,15 +2,46 @@
 
 ## 1. System Design
 
+**Core user actions**
+
+The three core actions a user should be able to perform:
+
+1. **Add a pet** — enter an owner and a pet with basic info (name, species, breed).
+2. **Add / edit care tasks** — create tasks for a pet, each with at least a duration and a
+   priority (and optionally a category, a preferred time, and whether it recurs).
+3. **Generate and view a daily plan** — build a schedule that orders and selects tasks to fit the
+   owner's available time, and see an explanation of why each task was chosen and placed.
+
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+My initial UML has four classes:
+
+- **Owner** — represents the person using the app. Holds the owner's name, a daily
+  `available_minutes` budget (a key scheduling constraint), free-form preferences, and a list of
+  `Pet` objects. Responsible for owning pets and collecting every task across all of its pets.
+- **Pet** — represents an animal being cared for. Holds `name`, `species`, `breed`, and its own
+  list of `Task` objects. Responsible for managing its task list (add/remove).
+- **Task** — represents one unit of care work. A dataclass holding `title`, `duration_minutes`,
+  `priority`, `category`, an optional `preferred_time`, and a `recurring` flag. Responsible for
+  describing a single activity and reporting a numeric priority weight for sorting.
+- **Scheduler** — the "brain" of the system. Given a set of tasks plus constraints (the available
+  time budget), it produces an ordered daily plan and can explain its choices. Responsible for
+  sorting tasks by priority, fitting them inside the time budget, and generating the reasoning.
+
+Relationships: an Owner *has* many Pets, a Pet *has* many Tasks, and the Scheduler *uses* Tasks to
+produce a plan.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+_(Filled in after reviewing the skeleton — see the review notes below.)_
+
+During review I noticed the Scheduler's output was under-specified: `build_plan` returned a bare list
+of tasks with no place to store *when* each task starts, which made "explain the plan / show the
+time next to each task" awkward. **Change:** I added a small `PlanItem` dataclass (a `start_time`
+plus the scheduled `Task`) so the plan carries its timing, and `Scheduler.build_plan` now returns
+`list[PlanItem]`. I also made `priority` values explicit (`low` / `medium` / `high`) and gave `Task`
+a `priority_weight()` helper so sorting logic lives with the data instead of being duplicated in the
+Scheduler. These changes keep the scheduling and display code cleaner without adding real complexity.
 
 ---
 
