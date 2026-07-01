@@ -18,6 +18,7 @@ classDiagram
         +list~Task~ tasks
         +add_task(task Task) None
         +remove_task(title str) None
+        +task_count() int
     }
 
     class Task {
@@ -27,7 +28,10 @@ classDiagram
         +str category
         +str preferred_time
         +bool recurring
+        +bool completed
         +priority_weight() int
+        +mark_complete() None
+        +mark_incomplete() None
     }
 
     class Scheduler {

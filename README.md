@@ -44,14 +44,27 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+Output from running the CLI demo (`python main.py`):
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Today's Schedule for Jordan (90 min available)
+====================================================
+  08:00  Morning walk          30 min  [high  ] Biscuit
+  08:30  Feeding               10 min  [high  ] Biscuit
+  08:40  Feeding               10 min  [high  ] Mochi
+  08:50  Medication             5 min  [high  ] Mochi
+  08:55  Litter box             5 min  [medium] Mochi
+  09:00  Fetch / enrichment    20 min  [low   ] Biscuit
+
+Why this plan:
+Scheduled 6 task(s) using 80 of 90 available minutes.
+Tasks are ordered by priority (high -> low) and laid out back-to-back starting at 08:00:
+  - 08:00 Morning walk: chosen because its priority is 'high' and it fit the remaining time.
+  - 08:30 Feeding: chosen because its priority is 'high' and it fit the remaining time.
+  - 08:40 Feeding: chosen because its priority is 'high' and it fit the remaining time.
+  - 08:50 Medication: chosen because its priority is 'high' and it fit the remaining time.
+  - 08:55 Litter box: chosen because its priority is 'medium' and it fit the remaining time.
+  - 09:00 Fetch / enrichment: chosen because its priority is 'low' and it fit the remaining time.
 ```
 
 ## 🧪 Testing PawPal+
@@ -67,7 +80,8 @@ pytest --cov
 Sample test output:
 
 ```
-# Paste your pytest output here
+......                                                                   [100%]
+6 passed in 0.03s
 ```
 
 ## 📐 Smarter Scheduling
