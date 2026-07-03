@@ -195,3 +195,32 @@ def test_plan_start_times_are_sequential():
     plan = scheduler.build_plan(tasks)
     assert [item.task.title for item in plan] == ["A", "B"]
     assert [item.start_time for item in plan] == ["08:00", "08:30"]
+
+
+# --- Challenge 1: next available slot ----------------------------------------
+
+def test_next_available_slot_empty_day_returns_day_start():
+    """With no timed tasks, the first slot is the scheduler's day_start."""
+    scheduler = Scheduler(day_start="08:00")
+    assert scheduler.next_available_slot([], 30) == "08:00"
+
+
+def test_next_available_slot_finds_gap_between_tasks():
+    """A 30-min request fits in the 08:30-09:00 gap between two 30-min tasks."""
+    scheduler = Scheduler(day_start="08:00")
+    tasks = [Task("A", 30, preferred_time="08:00"), Task("B", 30, preferred_time="09:00")]
+    assert scheduler.next_available_slot(tasks, 30) == "08:30"
+
+
+def test_next_available_slot_skips_gap_that_is_too_small():
+    """A 45-min request can't use the 30-min gap, so it lands after 09:30."""
+    scheduler = Scheduler(day_start="08:00")
+    tasks = [Task("A", 30, preferred_time="08:00"), Task("B", 30, preferred_time="09:00")]
+    assert scheduler.next_available_slot(tasks, 45) == "09:30"
+
+
+def test_next_available_slot_returns_none_when_no_room():
+    """If the day ends before the task can fit, return None instead of crashing."""
+    scheduler = Scheduler(day_start="23:00")
+    tasks = [Task("Late", 30, preferred_time="23:00")]
+    assert scheduler.next_available_slot(tasks, 60, day_end="23:45") is None

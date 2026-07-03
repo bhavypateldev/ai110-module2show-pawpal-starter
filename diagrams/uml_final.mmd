@@ -50,6 +50,7 @@ classDiagram
         +sort_by_time(tasks list~Task~) list~Task~
         +filter_by_status(tasks list~Task~, completed bool) list~Task~
         +find_conflicts(tasks list~Task~) list~str~
+        +next_available_slot(tasks list~Task~, duration int) str
         +complete_task(pet Pet, task Task) Task
         +explain(plan list~PlanItem~) str
     }

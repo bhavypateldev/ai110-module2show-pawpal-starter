@@ -205,6 +205,33 @@ class Scheduler:
                 )
         return warnings
 
+    def next_available_slot(
+        self, tasks: list[Task], duration_minutes: int, day_end: str = "24:00"
+    ) -> "str | None":
+        """Return the earliest start time that fits `duration_minutes` without
+        overlapping any already-timed task, or None if the day has no room.
+
+        Considers only tasks with a `preferred_time` (their occupied interval is
+        start .. start+duration) and searches gaps from `day_start` onward.
+        """
+        intervals = sorted(
+            (
+                _parse_time(task.preferred_time),
+                _parse_time(task.preferred_time) + task.duration_minutes,
+            )
+            for task in tasks
+            if task.preferred_time
+        )
+        limit = _parse_time(day_end)
+        cursor = _parse_time(self.day_start)
+        for start, end in intervals:
+            if start - cursor >= duration_minutes:
+                return _format_time(cursor)  # gap before this task is big enough
+            cursor = max(cursor, end)
+        if cursor + duration_minutes <= limit:
+            return _format_time(cursor)
+        return None
+
     def complete_task(self, pet: Pet, task: Task) -> "Task | None":
         """Mark a task done; if it recurs, add and return its next occurrence."""
         task.mark_complete()
