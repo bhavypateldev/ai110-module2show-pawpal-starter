@@ -120,7 +120,7 @@ explain — and I documented that tradeoff rather than hiding it (see 2b).
 
 **a. What you tested**
 
-The suite (`tests/test_pawpal.py`, 20 tests) covers:
+The suite (`tests/test_pawpal.py`, 27 tests) covers:
 
 - **Core objects** — completion status flips, adding a task grows a pet's count, and
   `all_tasks()` collects tasks across pets.

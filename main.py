@@ -1,18 +1,34 @@
 """CLI demo for PawPal+.
 
 A standalone "testing ground" that exercises the logic in pawpal_system.py:
-building a daily plan, sorting by time, filtering, conflict detection, and
-recurring-task regeneration. Run with:
+building a daily plan, sorting by time, filtering, conflict detection,
+recurring-task regeneration, and finding the next free slot. Output is formatted
+with the `tabulate` library and emoji status indicators. Run with:
 
     python main.py
 """
 
+import sys
 from datetime import date
+
+from tabulate import tabulate
 
 from pawpal_system import Owner, Pet, Scheduler, Task
 
+# Print emoji/box-drawing characters safely even on a Windows cp1252 console.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):  # pragma: no cover - platform dependent
+    pass
+
 # A fixed anchor day keeps the recurring-task output deterministic in this demo.
 BASE_DAY = date(2025, 1, 6)  # a Monday
+
+CATEGORY_ICONS = {
+    "walk": "🐕", "feeding": "🍽️", "meds": "💊",
+    "enrichment": "🎾", "grooming": "🧼", "general": "📌",
+}
+PRIORITY_ICONS = {"high": "🔴", "medium": "🟡", "low": "🟢"}
 
 
 def pet_name_for(owner: Owner, task: Task) -> str:
@@ -25,7 +41,7 @@ def pet_name_for(owner: Owner, task: Task) -> str:
 
 def build_owner() -> Owner:
     """Create a sample owner with two pets and several tasks (added out of order)."""
-    owner = Owner(name="Jordan", available_minutes=90)
+    owner = Owner(name="Jordan", available_minutes=120)
 
     biscuit = Pet(name="Biscuit", species="dog", breed="Golden Retriever")
     mochi = Pet(name="Mochi", species="cat", breed="Tabby")
@@ -39,38 +55,57 @@ def build_owner() -> Owner:
                           preferred_time="08:00", frequency="daily", due_date=BASE_DAY))
     biscuit.add_task(Task("Feeding", 10, priority="high", category="feeding",
                           preferred_time="08:30", frequency="daily", due_date=BASE_DAY))
+    # Low priority but the EARLIEST preferred time -> proves priority-first ordering.
+    biscuit.add_task(Task("Sunrise stretch", 15, priority="low",
+                          category="enrichment", preferred_time="07:00"))
     mochi.add_task(Task("Medication", 5, priority="high", category="meds",
                         preferred_time="21:00", frequency="weekly", due_date=BASE_DAY))
     mochi.add_task(Task("Feeding", 10, priority="high", category="feeding",
                         preferred_time="09:00", frequency="daily", due_date=BASE_DAY))
-    # Note the same 08:30 slot as Biscuit's feeding -> a conflict to detect.
+    # Same 08:30 slot as Biscuit's feeding -> a conflict to detect.
     mochi.add_task(Task("Litter box", 5, priority="medium", category="grooming",
                         preferred_time="08:30"))
     return owner
 
 
+def decorate(task: Task) -> str:
+    """Return the task title prefixed with an icon for its category."""
+    return f"{CATEGORY_ICONS.get(task.category, '📌')} {task.title}"
+
+
+def priority_label(task: Task) -> str:
+    """Return a color-dot + word label for the task's priority."""
+    return f"{PRIORITY_ICONS.get(task.priority, '')} {task.priority}"
+
+
 def print_schedule(owner: Owner, scheduler: Scheduler) -> None:
-    """Print today's priority-ordered plan and the reasoning behind it."""
+    """Print today's priority-ordered plan as a formatted table."""
     plan = scheduler.build_plan(owner.all_tasks())
     print(f"Today's Schedule for {owner.name} "
-          f"({owner.available_minutes} min available)")
-    print("=" * 52)
-    for item in plan:
-        task = item.task
-        print(f"  {item.start_time}  {task.title:<20} "
-              f"{task.duration_minutes:>3} min  "
-              f"[{task.priority:<6}] {pet_name_for(owner, task)}")
+          f"({owner.available_minutes} min available)\n")
+    rows = [
+        [item.start_time, decorate(item.task), pet_name_for(owner, item.task),
+         f"{item.task.duration_minutes} min", priority_label(item.task)]
+        for item in plan
+    ]
+    print(tabulate(rows, headers=["Start", "Task", "Pet", "Duration", "Priority"],
+                   tablefmt="rounded_outline"))
+    print("\nPriority-first: 'Sunrise stretch' is low priority, so despite its 07:00")
+    print("preferred time it is planned after the higher-priority tasks.")
     print("\nWhy this plan:")
     print(scheduler.explain(plan))
 
 
 def print_sorted_by_time(owner: Owner, scheduler: Scheduler) -> None:
     """Print all tasks sorted by their preferred time of day."""
-    print("\nAll tasks sorted by time (Scheduler.sort_by_time):")
-    print("-" * 52)
-    for task in scheduler.sort_by_time(owner.all_tasks()):
-        when = task.preferred_time or "any"
-        print(f"  {when:>5}  {task.title} ({pet_name_for(owner, task)})")
+    print("\nAll tasks sorted by time (Scheduler.sort_by_time):\n")
+    rows = [
+        [task.preferred_time or "any", decorate(task), pet_name_for(owner, task),
+         priority_label(task)]
+        for task in scheduler.sort_by_time(owner.all_tasks())
+    ]
+    print(tabulate(rows, headers=["Time", "Task", "Pet", "Priority"],
+                   tablefmt="rounded_outline"))
 
 
 def print_filters(owner: Owner, scheduler: Scheduler) -> None:
@@ -78,7 +113,7 @@ def print_filters(owner: Owner, scheduler: Scheduler) -> None:
     print("\nFilter -> only Mochi's tasks (Owner.tasks_for_pet):")
     print("-" * 52)
     for task in owner.tasks_for_pet("Mochi"):
-        print(f"  {task.title}")
+        print(f"  {decorate(task)}")
 
     pending = scheduler.filter_by_status(owner.all_tasks(), completed=False)
     print(f"\nFilter -> pending tasks (Scheduler.filter_by_status): "
@@ -92,9 +127,17 @@ def print_conflicts(owner: Owner, scheduler: Scheduler) -> None:
     warnings = scheduler.find_conflicts(owner.all_tasks())
     if warnings:
         for warning in warnings:
-            print(f"  [!] {warning}")
+            print(f"  ⚠  {warning}")
     else:
         print("  No conflicts found.")
+
+
+def print_next_slot(owner: Owner, scheduler: Scheduler) -> None:
+    """Print the next free time slot for a hypothetical 20-minute task."""
+    print("\nNext free 20-min slot (Scheduler.next_available_slot):")
+    print("-" * 52)
+    slot = scheduler.next_available_slot(owner.all_tasks(), 20)
+    print(f"  Earliest gap that fits a 20-minute task: {slot}")
 
 
 def demo_recurring(owner: Owner, scheduler: Scheduler) -> None:
@@ -119,6 +162,7 @@ def main() -> None:
     print_sorted_by_time(owner, scheduler)
     print_filters(owner, scheduler)
     print_conflicts(owner, scheduler)
+    print_next_slot(owner, scheduler)
     demo_recurring(owner, scheduler)
 
 
