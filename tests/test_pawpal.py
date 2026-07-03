@@ -224,3 +224,53 @@ def test_next_available_slot_returns_none_when_no_room():
     scheduler = Scheduler(day_start="23:00")
     tasks = [Task("Late", 30, preferred_time="23:00")]
     assert scheduler.next_available_slot(tasks, 60, day_end="23:45") is None
+
+
+# --- Challenge 2: JSON persistence -------------------------------------------
+
+def _sample_owner():
+    owner = Owner(name="Jordan", available_minutes=90)
+    biscuit = Pet(name="Biscuit", species="dog", breed="Golden Retriever")
+    owner.add_pet(biscuit)
+    biscuit.add_task(
+        Task("Morning walk", 30, priority="high", preferred_time="08:00",
+             frequency="daily", due_date=date(2025, 1, 6))
+    )
+    done = Task("Feeding", 10, priority="high")
+    done.mark_complete()
+    biscuit.add_task(done)
+    return owner
+
+
+def test_task_dict_round_trip_preserves_date_and_status():
+    """A task survives a to_dict/from_dict round trip, including its date."""
+    task = Task("Meds", 5, frequency="weekly", due_date=date(2025, 1, 6))
+    task.mark_complete()
+    restored = Task.from_dict(task.to_dict())
+    assert restored == task  # dataclass equality covers every field
+
+
+def test_owner_save_and_load_round_trip(tmp_path):
+    """Saving an owner to JSON and reloading rebuilds the whole object graph."""
+    path = tmp_path / "data.json"
+    original = _sample_owner()
+    original.save_to_json(path)
+
+    loaded = Owner.load_from_json(path)
+    assert loaded.name == "Jordan"
+    assert loaded.available_minutes == 90
+    assert len(loaded.pets) == 1
+    assert loaded.pets[0].task_count() == 2
+    walk = loaded.pets[0].tasks[0]
+    assert walk.due_date == date(2025, 1, 6)
+    assert loaded.pets[0].tasks[1].completed is True
+
+
+def test_loaded_tasks_are_usable_by_scheduler(tmp_path):
+    """Tasks reloaded from JSON still work with the scheduler's logic."""
+    path = tmp_path / "data.json"
+    _sample_owner().save_to_json(path)
+    loaded = Owner.load_from_json(path)
+    scheduler = Scheduler(available_minutes=loaded.available_minutes)
+    plan = scheduler.build_plan(loaded.all_tasks())
+    assert [item.task.title for item in plan] == ["Morning walk"]  # 'Feeding' is completed

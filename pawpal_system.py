@@ -9,6 +9,7 @@ conflict detection.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -80,6 +81,34 @@ class Task:
             completed=False,
         )
 
+    def to_dict(self) -> dict:
+        """Return a JSON-safe dict of this task (dates become ISO strings)."""
+        return {
+            "title": self.title,
+            "duration_minutes": self.duration_minutes,
+            "priority": self.priority,
+            "category": self.category,
+            "preferred_time": self.preferred_time,
+            "frequency": self.frequency,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "completed": self.completed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Task":
+        """Rebuild a Task from a dict produced by :meth:`to_dict`."""
+        due = data.get("due_date")
+        return cls(
+            title=data["title"],
+            duration_minutes=data["duration_minutes"],
+            priority=data.get("priority", "medium"),
+            category=data.get("category", "general"),
+            preferred_time=data.get("preferred_time"),
+            frequency=data.get("frequency", "none"),
+            due_date=date.fromisoformat(due) if due else None,
+            completed=data.get("completed", False),
+        )
+
 
 @dataclass
 class Pet:
@@ -104,6 +133,22 @@ class Pet:
     def task_count(self) -> int:
         """Return how many tasks are currently attached to this pet."""
         return len(self.tasks)
+
+    def to_dict(self) -> dict:
+        """Return a JSON-safe dict of this pet and its tasks."""
+        return {
+            "name": self.name,
+            "species": self.species,
+            "breed": self.breed,
+            "tasks": [task.to_dict() for task in self.tasks],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Pet":
+        """Rebuild a Pet (and its tasks) from a dict produced by :meth:`to_dict`."""
+        pet = cls(name=data["name"], species=data["species"], breed=data.get("breed", ""))
+        pet.tasks = [Task.from_dict(task) for task in data.get("tasks", [])]
+        return pet
 
 
 @dataclass
@@ -132,6 +177,37 @@ class Owner:
             if pet.name == pet_name:
                 return list(pet.tasks)
         return []
+
+    def to_dict(self) -> dict:
+        """Return a JSON-safe dict of this owner, its pets, and their tasks."""
+        return {
+            "name": self.name,
+            "available_minutes": self.available_minutes,
+            "preferences": self.preferences,
+            "pets": [pet.to_dict() for pet in self.pets],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Owner":
+        """Rebuild a full Owner graph from a dict produced by :meth:`to_dict`."""
+        owner = cls(
+            name=data["name"],
+            available_minutes=data.get("available_minutes", 120),
+            preferences=data.get("preferences", {}),
+        )
+        owner.pets = [Pet.from_dict(pet) for pet in data.get("pets", [])]
+        return owner
+
+    def save_to_json(self, path: str = "data.json") -> None:
+        """Persist this owner (with pets and tasks) to a JSON file."""
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(self.to_dict(), file, indent=2)
+
+    @classmethod
+    def load_from_json(cls, path: str = "data.json") -> "Owner":
+        """Load an owner (with pets and tasks) previously saved to JSON."""
+        with open(path, "r", encoding="utf-8") as file:
+            return cls.from_dict(json.load(file))
 
 
 @dataclass

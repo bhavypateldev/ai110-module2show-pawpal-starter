@@ -5,6 +5,7 @@ this file just imports those classes, keeps a single Owner in session state, and
 wires the buttons/forms to the methods built in Phase 2.
 """
 
+import os
 from datetime import date
 
 import streamlit as st
@@ -15,12 +16,18 @@ st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
 st.title("🐾 PawPal+")
 
+DATA_FILE = "data.json"
+
 # --- Application memory -------------------------------------------------------
 # Streamlit re-runs this whole script on every interaction, so we stash the
 # Owner in st.session_state. It is created once and reused on later reruns,
 # which keeps pets and tasks from being wiped out each time the page refreshes.
+# On first load we also restore from data.json if a previous run saved one.
 if "owner" not in st.session_state:
-    st.session_state.owner = Owner(name="Jordan", available_minutes=90)
+    if os.path.exists(DATA_FILE):
+        st.session_state.owner = Owner.load_from_json(DATA_FILE)
+    else:
+        st.session_state.owner = Owner(name="Jordan", available_minutes=90)
 owner: Owner = st.session_state.owner
 
 with st.expander("Scenario", expanded=False):
@@ -223,3 +230,22 @@ if st.button("Generate schedule"):
         )
         with st.expander("Why this plan?", expanded=True):
             st.text(scheduler.explain(plan))
+
+# --- Data persistence ---------------------------------------------------------
+st.divider()
+st.subheader("Data")
+st.caption(f"Save your pets and tasks so they're remembered next time (`{DATA_FILE}`).")
+
+save_col, load_col = st.columns(2)
+with save_col:
+    if st.button("💾 Save"):
+        owner.save_to_json(DATA_FILE)
+        st.success(f"Saved to {DATA_FILE}.")
+with load_col:
+    if st.button("🔄 Reload"):
+        if os.path.exists(DATA_FILE):
+            st.session_state.owner = Owner.load_from_json(DATA_FILE)
+            st.success(f"Reloaded from {DATA_FILE}.")
+            st.rerun()
+        else:
+            st.info(f"No {DATA_FILE} yet — click Save first.")

@@ -168,6 +168,27 @@ method that implements it:
 | Filtering | `Scheduler.filter_by_status()`, `Owner.tasks_for_pet()` | Filter by completion status, or return just one pet's tasks. |
 | Conflict handling | `Scheduler.find_conflicts()` | Groups tasks by `preferred_time` and returns a warning string per exact same-time collision (never raises). |
 | Recurring tasks | `Scheduler.complete_task()`, `Task.next_occurrence()`, `Task.is_recurring()` | Completing a `daily`/`weekly` task auto-creates the next occurrence using `timedelta` (today/day+1 or +1 week). |
+| Next available slot | `Scheduler.next_available_slot()` | Finds the earliest gap in the day that fits a task of a given duration without overlapping already-timed tasks (returns `None` if the day is full). |
+
+## 💾 Data Persistence
+
+PawPal+ can remember your pets and tasks between runs by saving them to a `data.json`
+file (git-ignored, since it's per-user runtime data).
+
+**How it works** — the `Owner`, `Pet`, and `Task` classes each have `to_dict()` /
+`from_dict()` methods that convert to and from plain, JSON-safe dictionaries (dates are
+stored as ISO strings). I used custom dictionary conversion rather than a library like
+`marshmallow` because the object graph is small and the conversion is easy to read and
+test. `Owner.save_to_json(path)` and `Owner.load_from_json(path)` wrap those with
+Python's built-in `json` module.
+
+**Workflow in the app** — on startup `app.py` loads `data.json` if it exists (otherwise
+it starts with a default owner). The **Data** section has **💾 Save** and **🔄 Reload**
+buttons, so anything you add is restored the next time you launch the app.
+
+**Files modified for this feature:** `pawpal_system.py` (serialization + save/load),
+`app.py` (load on startup + Save/Reload buttons), `.gitignore` (ignore `data.json`),
+and `tests/test_pawpal.py` (round-trip tests).
 
 ## 📸 Demo Walkthrough
 
