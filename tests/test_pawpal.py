@@ -127,3 +127,71 @@ def test_non_recurring_task_does_not_regenerate():
     pet.add_task(once)
     assert scheduler.complete_task(pet, once) is None
     assert pet.task_count() == 1
+
+
+# --- Edge cases --------------------------------------------------------------
+
+def test_pet_with_no_tasks_produces_empty_plan():
+    """An owner whose pet has no tasks yields an empty plan and no conflicts."""
+    owner = Owner(name="Jordan")
+    owner.add_pet(Pet(name="Biscuit", species="dog"))
+    scheduler = Scheduler()
+    assert owner.all_tasks() == []
+    assert scheduler.build_plan(owner.all_tasks()) == []
+    assert scheduler.find_conflicts(owner.all_tasks()) == []
+
+
+def test_tasks_for_unknown_pet_is_empty():
+    """Asking for a pet that doesn't exist returns an empty list, not an error."""
+    owner = Owner(name="Jordan")
+    owner.add_pet(Pet(name="Biscuit", species="dog"))
+    assert owner.tasks_for_pet("Nobody") == []
+
+
+def test_no_conflict_when_times_differ():
+    """Tasks at different preferred times should produce no conflict warnings."""
+    scheduler = Scheduler()
+    tasks = [Task("A", 10, preferred_time="08:00"), Task("B", 10, preferred_time="09:00")]
+    assert scheduler.find_conflicts(tasks) == []
+
+
+def test_untimed_tasks_are_not_conflicts():
+    """Tasks without a preferred time never count as same-time conflicts."""
+    scheduler = Scheduler()
+    tasks = [Task("A", 10, preferred_time=None), Task("B", 10, preferred_time=None)]
+    assert scheduler.find_conflicts(tasks) == []
+
+
+def test_weekly_task_regenerates_seven_days_later():
+    """Completing a weekly task creates a fresh occurrence due one week later."""
+    scheduler = Scheduler()
+    pet = Pet(name="Mochi", species="cat")
+    meds = Task("Medication", 5, frequency="weekly", due_date=date(2025, 1, 6))
+    pet.add_task(meds)
+    upcoming = scheduler.complete_task(pet, meds)
+    assert upcoming.due_date == date(2025, 1, 13)
+    assert upcoming.completed is False
+
+
+def test_task_exactly_filling_budget_is_included():
+    """A task whose duration equals the whole budget still fits (boundary)."""
+    scheduler = Scheduler(available_minutes=30)
+    plan = scheduler.build_plan([Task("Walk", 30, priority="high")])
+    assert len(plan) == 1
+
+
+def test_task_exceeding_budget_is_dropped():
+    """A task longer than the entire budget is left out of the plan."""
+    scheduler = Scheduler(available_minutes=30)
+    plan = scheduler.build_plan([Task("Marathon walk", 31, priority="high")])
+    assert plan == []
+
+
+def test_plan_start_times_are_sequential():
+    """Scheduled tasks start back-to-back from the scheduler's day_start."""
+    scheduler = Scheduler(available_minutes=120, day_start="08:00")
+    # Distinct priorities keep the order deterministic (high before medium).
+    tasks = [Task("A", 30, priority="high"), Task("B", 15, priority="medium")]
+    plan = scheduler.build_plan(tasks)
+    assert [item.task.title for item in plan] == ["A", "B"]
+    assert [item.start_time for item in plan] == ["08:00", "08:30"]

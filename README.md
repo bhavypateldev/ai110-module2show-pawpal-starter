@@ -95,20 +95,44 @@ Recurring tasks (Scheduler.complete_task -> Task.next_occurrence):
 
 ## 🧪 Testing PawPal+
 
+Run the full suite from the project root:
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+**What the tests cover** (`tests/test_pawpal.py`, 20 tests):
+
+- **Core objects** — `mark_complete()` flips status, `add_task()` grows a pet's task
+  count, and `Owner.all_tasks()` collects tasks across pets.
+- **Scheduling** — plans are ordered by priority, respect the time budget (boundary +
+  over-budget cases), skip completed tasks, and lay start times back-to-back.
+- **Sorting** — `sort_by_time()` returns tasks in chronological order, with untimed
+  tasks last.
+- **Filtering** — by completion status (`filter_by_status()`) and by pet
+  (`tasks_for_pet()`, including an unknown-pet case).
+- **Conflict detection** — flags two tasks at the exact same time, and correctly
+  reports *no* conflict when times differ or tasks are untimed.
+- **Recurrence** — completing a daily task creates a new one due the next day, a weekly
+  task one week later, and a one-off task regenerates nothing.
+- **Edge cases** — a pet with no tasks and an empty owner produce an empty plan without
+  errors.
+
+Successful run:
 
 ```
-............                                                             [100%]
-12 passed in 0.05s
+collected 20 items
+
+tests\test_pawpal.py ....................                                [100%]
+
+============================= 20 passed in 0.06s ==============================
 ```
+
+**Confidence level: ★★★★☆ (4/5).** All 20 tests pass, covering the happy paths and the
+main edge cases for scheduling, sorting, filtering, conflicts, and recurrence. Docking
+one star because conflict detection only catches exact same-time collisions (not
+overlapping durations) and the recurring flow isn't yet exercised through the Streamlit
+UI — both noted as future work in `reflection.md`.
 
 ## 📐 Smarter Scheduling
 
