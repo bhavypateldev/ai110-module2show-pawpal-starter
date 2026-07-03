@@ -22,6 +22,28 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## ✨ Features
+
+PawPal+ implements the following, split between the logic layer (`pawpal_system.py`)
+and the Streamlit UI (`app.py`):
+
+- **Owner / Pet / Task modeling** — an owner keeps multiple pets, each with its own
+  care tasks (title, duration, priority, category, preferred time, recurrence).
+- **Priority-first daily plan** — `Scheduler.build_plan()` orders tasks by priority,
+  packs them back-to-back from the day's start, and drops anything that won't fit the
+  owner's time budget. `Scheduler.explain()` describes *why* the plan looks that way.
+- **Sorting by time** — `Scheduler.sort_by_time()` lists tasks in chronological
+  `HH:MM` order, with untimed tasks last.
+- **Filtering** — by completion status (`Scheduler.filter_by_status()`) or by pet
+  (`Owner.tasks_for_pet()`); surfaced in the UI as a pet + status filter.
+- **Conflict warnings** — `Scheduler.find_conflicts()` flags tasks scheduled at the
+  same time and the UI shows them as `st.warning` banners (it never crashes).
+- **Daily / weekly recurrence** — completing a recurring task via
+  `Scheduler.complete_task()` auto-creates its next occurrence
+  (`Task.next_occurrence()` using `timedelta`).
+- **Persistent UI state** — the `Owner` is stored in `st.session_state`, so pets and
+  tasks survive Streamlit's reruns.
+
 ## Getting started
 
 ### Setup
@@ -149,12 +171,60 @@ method that implements it:
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Launch the app with `streamlit run app.py`. The page is organized top-to-bottom:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+**Main UI features**
+
+- **Owner** — set the owner's name and the daily time budget (minutes) the scheduler
+  must fit tasks into.
+- **Pets** — add pets (name, species, breed) via a form; each is stored on the `Owner`.
+- **Tasks** — pick a pet and add a task with a title, duration, priority, category,
+  preferred time, and a *Repeats* option (`none` / `daily` / `weekly`). Check a task off
+  to mark it complete.
+- **Conflict warnings** — if two tasks share a preferred time, a yellow warning banner
+  appears automatically.
+- **Tasks at a glance** — a table you can filter by pet and by status
+  (All / Pending / Completed); rows are sorted chronologically.
+- **Build schedule** — generates the priority-ordered daily plan, shows a green success
+  summary, a table of start times, and an expandable "Why this plan?" explanation.
+
+**Example workflow**
+
+1. Set the owner to *Jordan* with **90** available minutes.
+2. Add two pets: *Biscuit* (dog) and *Mochi* (cat).
+3. Add tasks — e.g. Biscuit's "Morning walk" (30 min, high, 08:00, daily) and "Feeding"
+   (10 min, high, 08:30), and Mochi's "Litter box" (5 min, medium, 08:30).
+4. Notice the **conflict warning** for the two 08:30 tasks.
+5. Use **Tasks at a glance** to filter to just Mochi, or to pending tasks only.
+6. Click **Generate schedule** to see the ordered plan and the reasoning.
+
+**Key Scheduler behaviors shown:** priority-first ordering, packing to a time budget,
+chronological sorting, pet/status filtering, same-time conflict warnings, and (via the
+CLI) daily/weekly recurrence.
+
+**Sample CLI output** from running `python main.py`:
+
+```
+Today's Schedule for Jordan (90 min available)
+====================================================
+  08:00  Morning walk          30 min  [high  ] Biscuit
+  08:30  Feeding               10 min  [high  ] Biscuit
+  08:40  Feeding               10 min  [high  ] Mochi
+  08:50  Medication             5 min  [high  ] Mochi
+  08:55  Litter box             5 min  [medium] Mochi
+  09:00  Fetch / enrichment    20 min  [low   ] Biscuit
+
+Conflict check (Scheduler.find_conflicts):
+----------------------------------------------------
+  [!] Conflict at 08:30: 'Feeding', 'Litter box' are all scheduled at the same time.
+
+Recurring tasks (Scheduler.complete_task -> Task.next_occurrence):
+----------------------------------------------------
+  Completing 'Morning walk' (frequency=daily, due 2025-01-06)...
+  -> next occurrence auto-created, due 2025-01-07 (completed=False)
+```
+
+*(The full CLI output — including the sorted and filtered views — is in the
+[Sample Output](#-sample-output) section above.)*
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->

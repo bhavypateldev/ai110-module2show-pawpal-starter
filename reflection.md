@@ -79,13 +79,40 @@ priority-first plan that fits the time budget.
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+I used AI across every phase: brainstorming the class breakdown and Mermaid UML in Phase 1,
+scaffolding class skeletons and then fleshing out logic in Phases 2–4, generating and debugging the
+pytest suite in Phase 5, and drafting documentation in Phase 6.
+
+The most effective AI features were:
+
+- **Agent / multi-file editing** — the biggest win was having the assistant edit `pawpal_system.py`,
+  `main.py`, `tests/test_pawpal.py`, `app.py`, and the docs together and then *run* the code
+  (`python main.py`, `python -m pytest`) to confirm each change actually worked, rather than just
+  suggesting snippets.
+- **Chat for targeted questions** — asking narrow, concrete questions ("how do I sort `HH:MM`
+  strings with a `sorted()` key?", "how should the Scheduler get all tasks from the Owner's pets?",
+  "how do I advance a date by one day with `timedelta`?") produced the most useful answers. Vague
+  prompts produced vague code; specific prompts tied to my existing method names produced code that
+  dropped straight in.
+- **Using separate chat sessions per phase** kept context clean: the design conversation didn't bleed
+  into the testing conversation, so the assistant stayed focused on the current goal and I could
+  reason about one concern at a time.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+I verified AI output primarily by *running it* — the CLI demo and the test suite were the source of
+truth, not the assistant's confidence.
+
+One concrete example: while building the test suite I wrote (with AI help) a "sequential start times"
+test that created two tasks with the **same** priority and no preferred time, then asserted a specific
+order. Reading the actual sort key in `build_plan()` (`-priority_weight`, then time, then duration),
+I realized the tie would be broken by *duration*, so the shorter task would come first — the opposite
+of what the test assumed. I didn't accept it as-is; I changed the tasks to have distinct priorities so
+the ordering was deterministic, which made the test both correct and meaningful.
+
+I also kept my conflict detection deliberately simple (exact same-time matches) instead of adopting a
+more "complete" interval-overlap algorithm, because the simpler version was easier to read, test, and
+explain — and I documented that tradeoff rather than hiding it (see 2b).
 
 ---
 
@@ -93,13 +120,29 @@ priority-first plan that fits the time budget.
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+The suite (`tests/test_pawpal.py`, 20 tests) covers:
+
+- **Core objects** — completion status flips, adding a task grows a pet's count, and
+  `all_tasks()` collects tasks across pets.
+- **Scheduling** — priority ordering, respecting the time budget (including the exact-fit boundary
+  and the one-minute-over case), excluding completed tasks, and sequential start times.
+- **Sorting** — chronological order with untimed tasks last.
+- **Filtering** — by status and by pet (including an unknown-pet lookup).
+- **Conflict detection** — flagging exact same-time tasks, and *not* false-flagging different or
+  untimed tasks.
+- **Recurrence** — daily → next day, weekly → +7 days, and one-off tasks regenerating nothing.
+
+These mattered because scheduling is the heart of the app: a plan that silently drops a high-priority
+task, mis-orders the day, or crashes on an empty pet would make the tool untrustworthy. Testing the
+"negative" cases (no conflict, nothing to schedule) was as important as the happy paths.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+I'm fairly confident (4/5) the scheduler works for the modeled scenario — every behavior I built has
+at least one test, and the CLI demo exercises the whole flow end-to-end. With more time I'd test:
+interval-overlap conflicts (not just exact matches), tasks with malformed or missing times, very tight
+time budgets that force many tasks to be dropped, recurrence across month/year boundaries, and driving
+the recurring-completion flow through the Streamlit UI (it's currently verified via the CLI and tests).
 
 ---
 
@@ -107,12 +150,25 @@ priority-first plan that fits the time budget.
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+The CLI-first workflow paid off: because the logic layer was solid and fully tested before I touched
+the UI, wiring `app.py` to the classes was quick and low-risk. I'm most satisfied with how cleanly the
+algorithmic layer (sorting, filtering, conflicts, recurrence) slotted into the existing `Scheduler`
+without needing to rewrite the earlier code — the Phase 1 design mostly held up.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+I'd upgrade conflict detection to account for overlapping *durations*, not just identical start times,
+and I'd let `build_plan()` honor each task's `preferred_time` when placing it instead of packing tasks
+back-to-back from `day_start`. I'd also wire the recurring-completion flow into the Streamlit UI so
+completing a daily task in the browser regenerates it, matching the CLI behavior.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+The most important thing I learned is what it means to be the **lead architect** when working with a
+powerful AI assistant. The AI is excellent at producing code fast, but it will happily generate a test
+that asserts the wrong thing, a "clever" one-liner that's harder to read, or an over-engineered
+algorithm I didn't ask for. My job was to own the design decisions — which classes exist, which
+tradeoffs are acceptable, what "correct" means — and to verify everything by actually running it. AI
+accelerated the *how*; I stayed responsible for the *what* and *why*. Treating the test suite and the
+CLI demo as the source of truth, and using focused per-phase conversations, is what kept the system
+coherent instead of a pile of plausible-looking code.

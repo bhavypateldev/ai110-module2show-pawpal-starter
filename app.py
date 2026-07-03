@@ -46,6 +46,18 @@ owner.available_minutes = int(
     )
 )
 
+# One scheduler drives every "smart" view below (conflicts, sorting, the plan).
+scheduler = Scheduler(available_minutes=owner.available_minutes, day_start="08:00")
+
+
+def pet_of(task: Task) -> str:
+    """Return the name of the pet that owns this task (identity match)."""
+    for pet in owner.pets:
+        if any(task is t for t in pet.tasks):
+            return pet.name
+    return "?"
+
+
 # --- Add a pet ----------------------------------------------------------------
 st.subheader("Pets")
 with st.form("add_pet_form", clear_on_submit=True):
@@ -137,28 +149,66 @@ if owner.pets:
             else:
                 task.mark_incomplete()
 
+    # --- Conflict warnings (Scheduler.find_conflicts) -------------------------
+    conflicts = scheduler.find_conflicts(owner.all_tasks())
+    if conflicts:
+        st.markdown("#### ⚠️ Schedule conflicts")
+        for warning in conflicts:
+            st.warning(warning)
+
+    # --- Tasks at a glance: filter + sort (uses the Scheduler's smarts) -------
+    st.markdown("### Tasks at a glance")
+    glance_col1, glance_col2 = st.columns(2)
+    with glance_col1:
+        pet_filter = st.selectbox("Filter by pet", ["All pets"] + [p.name for p in owner.pets])
+    with glance_col2:
+        status_filter = st.radio("Show", ["All", "Pending", "Completed"], horizontal=True)
+
+    overview = owner.all_tasks() if pet_filter == "All pets" else owner.tasks_for_pet(pet_filter)
+    if status_filter == "Pending":
+        overview = scheduler.filter_by_status(overview, completed=False)
+    elif status_filter == "Completed":
+        overview = scheduler.filter_by_status(overview, completed=True)
+    overview = scheduler.sort_by_time(overview)  # chronological order
+
+    if overview:
+        st.table(
+            [
+                {
+                    "Time": task.preferred_time or "any",
+                    "Task": task.title,
+                    "Pet": pet_of(task),
+                    "Priority": task.priority,
+                    "Repeats": task.frequency if task.is_recurring() else "—",
+                    "Done": "✅" if task.completed else "",
+                }
+                for task in overview
+            ]
+        )
+    else:
+        st.caption("No tasks match this filter.")
+
 # --- Build schedule -----------------------------------------------------------
 st.divider()
 st.subheader("Build schedule")
 st.caption("Generates a daily plan from all pending tasks, ordered by priority.")
 
 if st.button("Generate schedule"):
-    scheduler = Scheduler(available_minutes=owner.available_minutes, day_start="08:00")
-    plan = scheduler.build_plan(owner.all_tasks())
+    for warning in scheduler.find_conflicts(owner.all_tasks()):
+        st.warning(warning)
 
+    plan = scheduler.build_plan(owner.all_tasks())
     if not plan:
-        st.warning(
+        st.info(
             "Nothing to schedule. Add some tasks — or they may all be completed "
             "or too long to fit the available time."
         )
     else:
-        def pet_of(task: Task) -> str:
-            """Return the name of the pet that owns this task (identity match)."""
-            for pet in owner.pets:
-                if any(task is t for t in pet.tasks):
-                    return pet.name
-            return "?"
-
+        total = sum(item.task.duration_minutes for item in plan)
+        st.success(
+            f"Planned {len(plan)} task(s) using {total} of "
+            f"{owner.available_minutes} available minutes."
+        )
         st.table(
             [
                 {
