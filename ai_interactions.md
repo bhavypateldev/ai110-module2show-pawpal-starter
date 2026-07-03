@@ -43,15 +43,33 @@ I confirmed both with the "too small gap" and "no room" tests before accepting t
 
 > Compare two different prompts (or two different models) on the same task.
 
-| | Option A | Option B |
-|-|----------|----------|
-| **Model / tool used** | | |
-| **Prompt** | | |
-| **Response summary** | | |
-| **What was useful** | | |
-| **Problems noticed** | | |
-| **Decision** | | |
+**Task compared:** the logic for rescheduling a **weekly** recurring task — i.e. when a
+weekly task is completed, produce the next occurrence with the correct due date.
+
+**Prompt used for both:** *"In my `Task` dataclass (fields: title, duration_minutes,
+priority, frequency, due_date, completed), write a method that, when a weekly task is
+completed, returns a new Task for the next occurrence with the due date advanced by one
+week and completed reset to False. Keep it simple and avoid external libraries."*
+
+> ⚠️ **Honesty note:** Option A below is Claude, which I actually used to build this
+> project. I have **not yet** run the same prompt through a second model — the Option B
+> column is a placeholder for me to fill in after I run Gemini / ChatGPT / Copilot on the
+> identical prompt. I'm leaving it clearly marked rather than inventing another model's
+> output.
+
+| | Option A (used) | Option B (to run) |
+|-|-----------------|-------------------|
+| **Model / tool used** | Claude (Claude Code) | _TODO: e.g. Gemini / ChatGPT / Copilot_ |
+| **Prompt** | (see prompt above) | (same prompt) |
+| **Response summary** | Added `Task.is_recurring()` + `Task.next_occurrence()`. `next_occurrence` picks `timedelta(days=1)` for daily or `timedelta(weeks=1)` for weekly, adds it to `due_date` (falling back to `date.today()`), and returns a fresh `Task` with `completed=False`. A `Scheduler.complete_task(pet, task)` marks the task done and appends the new occurrence to the pet. | _TODO: paste the other model's answer_ |
+| **What was useful** | Used only the standard-library `datetime`, correctly reset `completed`, and separated the pure "make the next task" step from the "add it to the pet" step. | _TODO_ |
+| **Problems noticed** | It first based the next date on `date.today()`; I changed it to advance from the task's own `due_date` so a late-completed task still lands on the right weekly cadence. | _TODO_ |
+| **Decision** | **Kept Option A** (with my due_date fix). | _TODO_ |
 
 **Which approach did you use in your final implementation and why?**
 
-<!-- Your conclusion -->
+I used the Claude version (Option A) because it stayed dependency-free and testable, and
+after my one correction (advancing from `due_date` instead of `today`) it produced the
+correct weekly cadence — which I verified with the
+`test_weekly_task_regenerates_seven_days_later` test. To fully complete this stretch
+feature I still need to run the same prompt through a second model and fill in Option B.
