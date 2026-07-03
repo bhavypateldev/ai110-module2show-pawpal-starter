@@ -9,6 +9,7 @@ classDiagram
         +list~Pet~ pets
         +add_pet(pet Pet) None
         +all_tasks() list~Task~
+        +tasks_for_pet(name str) list~Task~
     }
 
     class Pet {
@@ -27,17 +28,24 @@ classDiagram
         +str priority
         +str category
         +str preferred_time
-        +bool recurring
+        +str frequency
+        +date due_date
         +bool completed
         +priority_weight() int
         +mark_complete() None
         +mark_incomplete() None
+        +is_recurring() bool
+        +next_occurrence() Task
     }
 
     class Scheduler {
         +int available_minutes
         +str day_start
         +build_plan(tasks list~Task~) list~PlanItem~
+        +sort_by_time(tasks list~Task~) list~Task~
+        +filter_by_status(tasks list~Task~, completed bool) list~Task~
+        +find_conflicts(tasks list~Task~) list~str~
+        +complete_task(pet Pet, task Task) Task
         +explain(plan list~PlanItem~) str
     }
 
@@ -49,5 +57,6 @@ classDiagram
     Owner "1" --> "*" Pet : has
     Pet "1" --> "*" Task : has
     Scheduler ..> Task : schedules
+    Scheduler ..> Pet : reschedules recurring
     Scheduler ..> PlanItem : produces
     PlanItem "1" --> "1" Task : wraps

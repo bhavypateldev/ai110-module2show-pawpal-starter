@@ -49,13 +49,29 @@ Scheduler. These changes keep the scheduling and display code cleaner without ad
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+The scheduler considers three constraints:
+
+1. **Priority** — tasks are ordered high → medium → low via `Task.priority_weight()`, so the most
+   important care happens first.
+2. **Time budget** — the owner's `available_minutes` caps the day; `build_plan()` lays tasks
+   back-to-back from `day_start` and drops any task that would exceed the budget.
+3. **Preferred time** — used as a tiebreaker within a priority level and for the `sort_by_time()`
+   and conflict-detection views.
+
+Priority mattered most because a busy owner cares more about *the right tasks getting done* than
+about exact clock times, so priority drives selection and time acts as the hard ceiling.
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+One deliberate tradeoff is in **conflict detection**: `find_conflicts()` only flags tasks that
+share the *exact same* `preferred_time` (e.g. two tasks both at `08:30`). It does **not** account
+for overlapping durations — a 30-minute task at `08:00` and a task at `08:15` won't be reported even
+though they truly overlap. I chose exact-match detection because it is simple, fast, easy to explain,
+and never raises; a real owner mostly needs a lightweight nudge that two things collide, and full
+interval-overlap math would add complexity that isn't justified for this scenario. A similar
+tradeoff exists in `build_plan()`, which schedules tasks sequentially from `day_start` rather than
+honoring each task's `preferred_time` exactly — trading precise clock placement for a guaranteed,
+priority-first plan that fits the time budget.
 
 ---
 

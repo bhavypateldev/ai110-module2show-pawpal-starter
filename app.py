@@ -5,6 +5,8 @@ this file just imports those classes, keeps a single Owner in session state, and
 wires the buttons/forms to the methods built in Phase 2.
 """
 
+from datetime import date
+
 import streamlit as st
 
 from pawpal_system import Owner, Pet, Scheduler, Task
@@ -88,7 +90,7 @@ if owner.pets:
         with row2[1]:
             preferred_time = st.text_input("Preferred time (HH:MM)", value="")
         with row2[2]:
-            recurring = st.checkbox("Recurring", value=False)
+            frequency = st.selectbox("Repeats", ["none", "daily", "weekly"])
         if st.form_submit_button("Add task"):
             pet = owner.pets[target_index]
             pet.add_task(
@@ -98,7 +100,8 @@ if owner.pets:
                     priority=priority,
                     category=category.strip() or "general",
                     preferred_time=preferred_time.strip() or None,
-                    recurring=recurring,
+                    frequency=frequency,
+                    due_date=date.today() if frequency != "none" else None,
                 )
             )
             st.success(f"Added '{title.strip() or 'Untitled task'}' to {pet.name}.")
@@ -123,9 +126,10 @@ if owner.pets:
                 )
             with text_col:
                 when = f" @ {task.preferred_time}" if task.preferred_time else ""
+                repeats = f" · repeats {task.frequency}" if task.is_recurring() else ""
                 st.write(
                     f"{task.title} — {task.duration_minutes} min "
-                    f"[{task.priority}]{when}"
+                    f"[{task.priority}]{when}{repeats}"
                 )
             # Reflect the checkbox back onto the Task object.
             if done:

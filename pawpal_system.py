@@ -2,15 +2,24 @@
 
 The system's "brain," independent of the Streamlit UI. It models pet care work
 (:class:`Task`), the animals (:class:`Pet`), the person (:class:`Owner`), and a
-:class:`Scheduler` that turns tasks + constraints into an ordered daily plan.
+:class:`Scheduler` that turns tasks + constraints into an ordered daily plan and
+provides the "smart" behaviors: sorting, filtering, recurring tasks, and
+conflict detection.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 
 # Priority labels used by tasks, ordered from least to most urgent.
 PRIORITY_WEIGHTS: dict[str, int] = {"low": 1, "medium": 2, "high": 3}
+
+# Frequencies a task can repeat on (anything else means it does not recur).
+RECURRING_FREQUENCIES: set[str] = {"daily", "weekly"}
+
+# Sentinel time used to sort tasks that have no preferred time to the end.
+_UNTIMED = 24 * 60
 
 
 def _parse_time(hhmm: str) -> int:
@@ -34,7 +43,8 @@ class Task:
     priority: str = "medium"  # one of: "low", "medium", "high"
     category: str = "general"  # e.g. "walk", "feeding", "meds", "enrichment"
     preferred_time: str | None = None  # e.g. "08:00", or None for "any time"
-    recurring: bool = False  # True for daily/repeating tasks, False for one-offs
+    frequency: str = "none"  # "none", "daily", or "weekly"
+    due_date: date | None = None  # the day this occurrence is due
     completed: bool = False
 
     def priority_weight(self) -> int:
@@ -48,6 +58,27 @@ class Task:
     def mark_incomplete(self) -> None:
         """Reset this task back to not-done."""
         self.completed = False
+
+    def is_recurring(self) -> bool:
+        """Return True if this task repeats on a daily/weekly schedule."""
+        return self.frequency in RECURRING_FREQUENCIES
+
+    def next_occurrence(self) -> "Task | None":
+        """Return a fresh, uncompleted copy due on the next date, or None."""
+        if not self.is_recurring():
+            return None
+        step = timedelta(days=1) if self.frequency == "daily" else timedelta(weeks=1)
+        base = self.due_date or date.today()
+        return Task(
+            title=self.title,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            category=self.category,
+            preferred_time=self.preferred_time,
+            frequency=self.frequency,
+            due_date=base + step,
+            completed=False,
+        )
 
 
 @dataclass
@@ -95,6 +126,13 @@ class Owner:
             tasks.extend(pet.tasks)
         return tasks
 
+    def tasks_for_pet(self, pet_name: str) -> list[Task]:
+        """Return the tasks belonging to the pet with the given name."""
+        for pet in self.pets:
+            if pet.name == pet_name:
+                return list(pet.tasks)
+        return []
+
 
 @dataclass
 class PlanItem:
@@ -105,7 +143,7 @@ class PlanItem:
 
 
 class Scheduler:
-    """Builds and explains a daily plan from tasks and time constraints."""
+    """Builds and explains a daily plan, plus sorting/filtering/conflict helpers."""
 
     def __init__(self, available_minutes: int = 120, day_start: str = "08:00") -> None:
         """Create a scheduler with a daily time budget and a start-of-day time."""
@@ -118,7 +156,7 @@ class Scheduler:
             tasks,
             key=lambda t: (
                 -t.priority_weight(),
-                _parse_time(t.preferred_time) if t.preferred_time else 24 * 60,
+                _parse_time(t.preferred_time) if t.preferred_time else _UNTIMED,
                 t.duration_minutes,
             ),
         )
@@ -135,6 +173,46 @@ class Scheduler:
             cursor += task.duration_minutes
             minutes_used += task.duration_minutes
         return plan
+
+    def sort_by_time(self, tasks: list[Task]) -> list[Task]:
+        """Return tasks sorted by preferred time ('HH:MM'); untimed tasks go last."""
+        return sorted(
+            tasks,
+            key=lambda t: _parse_time(t.preferred_time) if t.preferred_time else _UNTIMED,
+        )
+
+    def filter_by_status(self, tasks: list[Task], completed: bool) -> list[Task]:
+        """Return only the tasks whose completion status matches `completed`."""
+        return [task for task in tasks if task.completed == completed]
+
+    def find_conflicts(self, tasks: list[Task]) -> list[str]:
+        """Return a warning for each group of tasks sharing a preferred time.
+
+        Lightweight: it only flags *exact* same-time collisions and never raises,
+        so callers can display the warnings instead of crashing.
+        """
+        by_time: dict[str, list[Task]] = {}
+        for task in tasks:
+            if task.preferred_time:
+                by_time.setdefault(task.preferred_time, []).append(task)
+        warnings: list[str] = []
+        for when in sorted(by_time):
+            group = by_time[when]
+            if len(group) > 1:
+                titles = ", ".join(f"'{task.title}'" for task in group)
+                warnings.append(
+                    f"Conflict at {when}: {titles} are all scheduled at the same time."
+                )
+        return warnings
+
+    def complete_task(self, pet: Pet, task: Task) -> "Task | None":
+        """Mark a task done; if it recurs, add and return its next occurrence."""
+        task.mark_complete()
+        if task.is_recurring():
+            upcoming = task.next_occurrence()
+            pet.add_task(upcoming)
+            return upcoming
+        return None
 
     def explain(self, plan: list[PlanItem]) -> str:
         """Return a human-readable explanation of why the plan looks this way."""
